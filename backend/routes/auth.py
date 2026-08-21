@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.user import User
 from models.activity_log import ActivityLog
-from schemas.auth import UserRegister, UserLogin, Token, UserResponse
+from schemas.auth import UserRegister, UserUpdate, UserLogin, Token, UserResponse
 from utils.security import hash_password, verify_password, create_access_token, decode_access_token
 from datetime import datetime
 from typing import List, Optional, Callable
@@ -152,4 +152,26 @@ def login(login_in: UserLogin, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
+
+@router.put("/me", response_model=UserResponse)
+def update_me(
+    update_in: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if update_in.name:
+        current_user.name = update_in.name
+    if update_in.role:
+        current_user.role = update_in.role
+
+    log = ActivityLog(
+        user_id=current_user.email,
+        action="USER_UPDATE_PROFILE",
+        description=f"User {current_user.email} updated profile.",
+        timestamp=datetime.utcnow()
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(current_user)
     return current_user

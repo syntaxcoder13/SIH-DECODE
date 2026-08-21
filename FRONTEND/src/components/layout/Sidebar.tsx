@@ -15,26 +15,28 @@ import {
   Settings,
   ShieldHalf,
   X,
-  PanelLeft,
   ChevronsUpDown,
   User,
-  LifeBuoy,
   LogOut,
   Sun,
   Moon,
+  Database
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { client } from "@/lib/api/client";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/agents", label: "AI Agents", icon: Bot },
+  { href: "/agents", label: "AI Security Agents", icon: Bot },
   { href: "/threats", label: "Live Threats", icon: Radar },
-  { href: "/incidents", label: "Incident Investigation", icon: FileSearch },
+  { href: "/incidents", label: "Incidents", icon: FileSearch },
   { href: "/prediction", label: "Threat Prediction", icon: Waypoints },
   { href: "/attack-graph", label: "Attack Graph", icon: ShieldAlert },
   { href: "/risk", label: "Risk Center", icon: ShieldHalf },
   { href: "/network", label: "Network Map", icon: Network },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/database", label: "Database Console", icon: Database },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar({
@@ -46,39 +48,47 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [collapsed, setCollapsed] = useState(false);
-  const [isHeaderHovered, setIsHeaderHovered] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Sync theme icon state with active setting
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedTheme = localStorage.getItem("aegis_theme") || "dark";
-      setTimeout(() => {
-        setTheme(storedTheme);
-      }, 0);
-    }
-  }, [menuOpen]);
+  const [userName, setUserName] = useState("Analyst");
+  const [userRole, setUserRole] = useState("Analyst");
+  const [userInitials, setUserInitials] = useState("A");
 
-  // Keyboard shortcuts (Ctrl+P, Ctrl+S, Ctrl+Q)
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey) {
-        const key = e.key.toLowerCase();
-        if (key === "p" || key === "s") {
-          e.preventDefault();
-          router.push("/settings");
-        } else if (key === "q") {
-          e.preventDefault();
-          localStorage.removeItem("aegis_auth");
-          router.push("/login");
+    const loadUserData = async () => {
+      const storedName = localStorage.getItem("aegis_user_name");
+      const storedRole = localStorage.getItem("aegis_user_role");
+      if (storedName) {
+        setUserName(storedName);
+        setUserInitials(storedName.charAt(0).toUpperCase());
+      }
+      if (storedRole) {
+        setUserRole(storedRole.charAt(0).toUpperCase() + storedRole.slice(1));
+      }
+
+      try {
+        const me = await client.get<{ name: string; role: string }>("/api/auth/me");
+        if (me && me.name) {
+          setUserName(me.name);
+          setUserInitials(me.name.charAt(0).toUpperCase());
+          localStorage.setItem("aegis_user_name", me.name);
         }
+        if (me && me.role) {
+          const formatted = me.role.charAt(0).toUpperCase() + me.role.slice(1);
+          setUserRole(formatted);
+          localStorage.setItem("aegis_user_role", me.role);
+        }
+      } catch (e) {
+        // Ignore unauthenticated
       }
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [router]);
+
+    loadUserData();
+    const handleAuthChange = () => loadUserData();
+    window.addEventListener("aegis_auth_change", handleAuthChange);
+    return () => window.removeEventListener("aegis_auth_change", handleAuthChange);
+  }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
@@ -86,10 +96,8 @@ export function Sidebar({
     localStorage.setItem("aegis_theme", nextTheme);
     if (nextTheme === "light") {
       document.documentElement.classList.add("light");
-      document.documentElement.style.colorScheme = "light";
     } else {
       document.documentElement.classList.remove("light");
-      document.documentElement.style.colorScheme = "dark";
     }
   };
 
@@ -98,162 +106,104 @@ export function Sidebar({
     setMenuOpen((o) => !o);
   };
 
-  const handleHeaderClick = () => {
-    if (typeof window !== "undefined") {
-      if (window.innerWidth < 1024) {
-        onCloseMobile();
-      } else {
-        setCollapsed((c) => !c);
-      }
-    }
-  };
-
   const content = (
-    <div className="flex h-full flex-col">
-      <div className={cn("flex items-center py-5 transition-all duration-300", collapsed ? "px-[22px] justify-center" : "px-4 justify-between gap-2")}>
-        <div
-          onClick={handleHeaderClick}
-          onMouseEnter={() => setIsHeaderHovered(true)}
-          onMouseLeave={() => setIsHeaderHovered(false)}
-          className="flex items-center min-w-0 cursor-pointer select-none group/logo"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-secondary glow-primary transition-all duration-300">
-            {isHeaderHovered ? (
-              <PanelLeft className="h-4.5 w-4.5 text-white animate-pulse" strokeWidth={2.2} />
-            ) : (
-              <ShieldHalf className="h-4.5 w-4.5 text-white" strokeWidth={2.2} />
-            )}
-          </div>
-          <div
-            className={cn(
-              "min-w-0 transition-all duration-300 ease-in-out overflow-hidden flex flex-col justify-center",
-              collapsed ? "max-w-0 opacity-0 ml-0 pointer-events-none" : "max-w-[160px] opacity-100 ml-2.5"
-            )}
-          >
-            <p className="truncate text-[15px] font-bold leading-tight text-text-1">AegisSOC AI</p>
-            <p className="truncate text-[10px] leading-tight text-text-2">Autonomous Security Ops</p>
-          </div>
-        </div>
-        <button
-          onClick={onCloseMobile}
-          className={cn("text-text-2 hover:text-text-1 lg:hidden cursor-pointer", collapsed && "hidden")}
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+    <div className="w-64 bg-[#0D0E14]/90 backdrop-blur-md border-r border-white/10 shrink-0 p-4 flex flex-col justify-between h-full">
+      <div className="flex flex-col gap-6">
+        {/* Sidebar Brand Header */}
+        <div className="flex items-center justify-between pb-2 border-b border-white/10">
+          <Link href="/dashboard" className="flex items-center gap-3 select-none group">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-500 shadow-lg shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+              <ShieldHalf className="h-5 w-5 text-white" strokeWidth={2.2} />
+            </div>
+            <div className="flex flex-col">
+              <span className="truncate text-sm font-extrabold tracking-wider text-slate-100 uppercase">AegisSOC AI</span>
+              <span className="truncate text-[10px] font-medium text-slate-400">Autonomous SOC Platform</span>
+            </div>
+          </Link>
 
-      <nav className="flex-1 overflow-y-auto px-2.5 py-2">
-        <ul className="flex flex-col gap-1">
+          <button onClick={onCloseMobile} className="text-slate-400 hover:text-slate-200 lg:hidden cursor-pointer">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Navigation Item List */}
+        <nav className="space-y-1 overflow-y-auto max-h-[calc(100vh-180px)] scrollbar-thin">
           {NAV.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={onCloseMobile}
-                  className={cn(
-                    "group flex items-center rounded-lg px-3 py-2.5 text-sm transition-colors",
-                    active
-                      ? "bg-primary/15 text-text-1 border border-primary/30 glow-primary"
-                      : "text-text-2 hover:bg-white/5 hover:text-text-1 border border-transparent",
-                    collapsed ? "justify-center" : "justify-start gap-3"
-                  )}
-                >
-                  <Icon className={cn("h-4.5 w-4.5 shrink-0", active ? "text-primary" : "text-text-2 group-hover:text-text-1")} />
-                  <span
-                    className={cn(
-                      "truncate transition-all duration-300 ease-in-out inline-block",
-                      collapsed ? "max-w-0 opacity-0 ml-0 pointer-events-none" : "max-w-[200px] opacity-100"
-                    )}
-                  >
-                    {item.label}
-                  </span>
-                </Link>
-              </li>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onCloseMobile}
+                className={cn(
+                  "relative group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-200",
+                  active
+                    ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.15)]"
+                    : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200 border border-transparent"
+                )}
+              >
+                {active && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                )}
+                <Icon className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-indigo-400" : "text-slate-400 group-hover:text-slate-200")} />
+                <span className="truncate">{item.label}</span>
+              </Link>
             );
           })}
-        </ul>
-      </nav>
+        </nav>
+      </div>
 
-      {/* Profile Section at the Bottom */}
-      <div className="relative border-t border-border-1 p-2.5">
+      {/* Sidebar Footer User Profile */}
+      <div className="relative border-t border-white/10 pt-3">
         {menuOpen && (
           <>
-            {/* Transparent click-shield backdrop overlay */}
-            <div
-              className="fixed inset-0 z-40 cursor-default"
-              onClick={() => setMenuOpen(false)}
-            />
-            {/* Popover */}
+            <div className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuOpen(false)} />
             <div
               onClick={(e) => e.stopPropagation()}
-              style={{ backgroundColor: theme === "light" ? "#EEE9DF" : "#11111A" }}
-              className="absolute bottom-14 left-2.5 w-56 border border-border-2 rounded-xl p-2.5 shadow-2xl animate-fade-up z-50 select-none"
+              className="absolute bottom-16 left-0 w-56 border border-white/10 bg-[#13151F] rounded-2xl p-2.5 shadow-2xl z-50 select-none animate-fade-up"
             >
-              {/* Header info */}
-              <div className="px-3 py-2 min-w-0">
-                <p className="truncate text-sm font-bold text-text-1">User</p>
-                <p className="truncate text-xs text-text-2 mt-0.5">—</p>
+              <div className="px-3 py-2">
+                <p className="truncate text-xs font-bold text-slate-100">{userName}</p>
+                <p className="truncate text-[10px] text-slate-400 mt-0.5">{userRole}</p>
               </div>
-              
-              <div className="my-1.5 h-px bg-border-2" />
-              
-              {/* Action Items */}
-              <Link
-                href="/settings"
-                onClick={() => setMenuOpen(false)}
-                className="group flex items-center justify-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-text-1/90 hover:text-text-1 hover:bg-white/5 transition-colors"
-              >
-                <User className="h-4 w-4 text-text-2 group-hover:text-primary transition-colors" />
-                <span>Profile</span>
-              </Link>
+
+              <div className="my-1.5 h-px bg-white/10" />
 
               <Link
                 href="/settings"
                 onClick={() => setMenuOpen(false)}
-                className="group flex items-center justify-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-text-1/90 hover:text-text-1 hover:bg-white/5 transition-colors"
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-slate-100 transition-colors"
               >
-                <Settings className="h-4 w-4 text-text-2 group-hover:text-primary transition-colors" />
-                <span>Settings</span>
+                <User className="h-3.5 w-3.5 text-slate-400" />
+                <span>Profile & Settings</span>
               </Link>
-
-              <div className="my-1.5 h-px bg-border-2" />
 
               <button
                 onClick={() => {
                   toggleTheme();
                   setMenuOpen(false);
                 }}
-                className="group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-text-1/90 hover:text-text-1 hover:bg-white/5 transition-colors cursor-pointer"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-slate-100 transition-colors cursor-pointer"
               >
-                {theme === "light" ? (
-                  <Moon className="h-4 w-4 text-text-2 group-hover:text-primary transition-colors" />
-                ) : (
-                  <Sun className="h-4 w-4 text-text-2 group-hover:text-primary transition-colors" />
-                )}
+                {theme === "light" ? <Moon className="h-3.5 w-3.5 text-slate-400" /> : <Sun className="h-3.5 w-3.5 text-slate-400" />}
                 <span>{theme === "light" ? "Dark Mode" : "Light Mode"}</span>
               </button>
 
-              <button
-                onClick={() => setMenuOpen(false)}
-                className="group flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-text-1/90 hover:text-text-1 hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <LifeBuoy className="h-4 w-4 text-text-2 group-hover:text-primary transition-colors" />
-                <span>Support</span>
-              </button>
-
-              <div className="my-1.5 h-px bg-border-2" />
+              <div className="my-1.5 h-px bg-white/10" />
 
               <button
                 onClick={() => {
                   localStorage.removeItem("aegis_auth");
+                  localStorage.removeItem("aegis_token");
+                  localStorage.removeItem("aegis_user_name");
+                  localStorage.removeItem("aegis_user_role");
                   router.push("/login");
                 }}
-                className="group flex w-full items-center justify-start gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
               >
-                <LogOut className="h-4 w-4 text-danger/80 group-hover:text-danger transition-colors" />
-                <span>Log out</span>
+                <LogOut className="h-3.5 w-3.5 text-rose-400" />
+                <span>Sign Out</span>
               </button>
             </div>
           </>
@@ -261,31 +211,18 @@ export function Sidebar({
 
         <div
           onClick={handleProfileClick}
-          className={cn(
-            "relative z-30 flex w-full items-center rounded-lg px-2 py-2 text-sm transition-all duration-300 hover:bg-white/5 cursor-pointer",
-            collapsed ? "justify-center" : "justify-between"
-          )}
+          className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs transition-colors hover:bg-white/[0.04] cursor-pointer border border-transparent hover:border-white/10"
         >
-          <div className="flex items-center min-w-0">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary text-xs font-semibold text-white border border-primary/30 shadow-md">
-              U
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-xs font-bold text-white shadow-md">
+              {userInitials}
             </div>
-            <div
-              className={cn(
-                "min-w-0 transition-all duration-300 ease-in-out overflow-hidden flex flex-col justify-center",
-                collapsed ? "max-w-0 opacity-0 ml-0 pointer-events-none" : "max-w-[140px] opacity-100 ml-2.5"
-              )}
-            >
-              <p className="truncate text-xs font-bold leading-tight text-text-1">User</p>
-              <p className="truncate text-[10px] leading-tight text-text-2">—</p>
+            <div className="flex flex-col min-w-0">
+              <span className="truncate text-xs font-bold text-slate-100">{userName}</span>
+              <span className="truncate text-[10px] text-slate-400">{userRole}</span>
             </div>
           </div>
-          <ChevronsUpDown
-            className={cn(
-              "h-3.5 w-3.5 text-text-2 shrink-0 transition-all duration-300",
-              collapsed ? "w-0 opacity-0 pointer-events-none" : "w-3.5 opacity-100 ml-1.5"
-            )}
-          />
+          <ChevronsUpDown className="h-3.5 w-3.5 text-slate-500 shrink-0" />
         </div>
       </div>
     </div>
@@ -293,27 +230,22 @@ export function Sidebar({
 
   return (
     <>
-      {/* Desktop */}
-      <aside
-        className={cn(
-          "hidden lg:flex sticky top-0 h-screen z-30 shrink-0 flex-col border-r border-border-1 bg-bg-1/80 backdrop-blur-xl transition-[width] duration-300 ease-in-out",
-          collapsed ? "w-[76px]" : "w-[248px]"
-        )}
-      >
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex shrink-0 h-screen sticky top-0 z-30">
         {content}
       </aside>
 
-      {/* Mobile drawer */}
+      {/* Mobile Drawer */}
       <div
         className={cn(
           "fixed inset-0 z-[80] lg:hidden transition-opacity",
           mobileOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
         )}
       >
-        <div className="absolute inset-0 bg-black/60" onClick={onCloseMobile} />
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onCloseMobile} />
         <aside
           className={cn(
-            "absolute left-0 top-0 h-full w-[260px] border-r border-border-1 bg-bg-1 transition-transform duration-200",
+            "absolute left-0 top-0 h-full transition-transform duration-200",
             mobileOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >

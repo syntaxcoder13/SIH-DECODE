@@ -1,26 +1,35 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { useState, useEffect } from "react";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
+import { client } from "@/lib/api/client";
+import { User, Building, Shield, Bell, Bot, Layers, Palette, Save, X, Loader2 } from "lucide-react";
 
-const TABS = ["Profile", "Organization", "Security", "Notifications", "AI Agents", "Integrations", "Appearance"] as const;
+const TABS = [
+  { id: "Profile", label: "Profile", icon: User },
+  { id: "Organization", label: "Organization", icon: Building },
+  { id: "Security", label: "Security", icon: Shield },
+  { id: "Notifications", label: "Notifications", icon: Bell },
+  { id: "AI Agents", label: "AI Agents", icon: Bot },
+  { id: "Integrations", label: "Integrations", icon: Layers },
+  { id: "Appearance", label: "Appearance", icon: Palette },
+] as const;
 
 function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
   const [on, setOn] = useState(defaultChecked);
   return (
     <button
+      type="button"
       onClick={() => setOn((v) => !v)}
       className={cn(
         "relative h-6 w-11 shrink-0 rounded-full border-2 transition-colors cursor-pointer",
-        on ? "border-primary bg-primary" : "border-border-2 bg-border-2"
+        on ? "border-indigo-500 bg-indigo-600" : "border-slate-700 bg-slate-800"
       )}
     >
       <span
         className={cn(
-          "absolute top-0 left-0 h-5 w-5 rounded-full bg-white transition-transform duration-200",
+          "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white transition-transform duration-200 shadow-sm",
           on ? "translate-x-5" : "translate-x-0"
         )}
       />
@@ -28,25 +37,12 @@ function Toggle({ defaultChecked = false }: { defaultChecked?: boolean }) {
   );
 }
 
-function Field({ label, defaultValue, type = "text" }: { label: string; defaultValue: string; type?: string }) {
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-text-2">{label}</label>
-      <input
-        type={type}
-        defaultValue={defaultValue}
-        className="w-full rounded-lg border border-border-1 bg-surface-1 px-3 py-2 text-sm text-text-1 outline-none focus:border-primary/50"
-      />
-    </div>
-  );
-}
-
 function Row({ label, description, defaultChecked }: { label: string; description: string; defaultChecked?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border-1 py-3.5 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-4 last:border-0">
       <div>
-        <p className="text-sm text-text-1">{label}</p>
-        <p className="text-xs text-text-2">{description}</p>
+        <p className="text-sm font-semibold text-slate-100">{label}</p>
+        <p className="text-xs text-slate-400 mt-0.5">{description}</p>
       </div>
       <Toggle defaultChecked={defaultChecked} />
     </div>
@@ -54,120 +50,270 @@ function Row({ label, description, defaultChecked }: { label: string; descriptio
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Profile");
+  const [tab, setTab] = useState<string>("Profile");
   const { push } = useToast();
 
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("");
+  const [phone, setPhone] = useState("+1 (555) 019-2834");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const storedName = localStorage.getItem("aegis_user_name");
+    const storedRole = localStorage.getItem("aegis_user_role");
+    if (storedName) setName(storedName);
+    if (storedRole) setRole(storedRole);
+
+    client.get<{ name: string; email: string; role: string }>("/api/auth/me")
+      .then((user) => {
+        if (user) {
+          if (user.name) setName(user.name);
+          if (user.email) setEmail(user.email);
+          if (user.role) setRole(user.role);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      const updated = await client.put<{ name: string; role: string }>("/api/auth/me", {
+        name,
+        role
+      });
+      if (updated) {
+        localStorage.setItem("aegis_user_name", updated.name || name);
+        localStorage.setItem("aegis_user_role", updated.role || role);
+        window.dispatchEvent(new Event("aegis_auth_change"));
+        push("Profile updated", "Your profile details have been saved to the database.", "success");
+      }
+    } catch (err: any) {
+      push("Update failed", err.message || "Could not update profile.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    const storedName = localStorage.getItem("aegis_user_name") || "";
+    const storedRole = localStorage.getItem("aegis_user_role") || "";
+    setName(storedName);
+    setRole(storedRole);
+    push("Changes reset", "Form values reset to current active profile.", "info");
+  };
+
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[220px_1fr]">
-      <Card className="h-fit p-2">
-        <nav className="flex flex-row overflow-x-auto lg:flex-col gap-1 pb-1.5 lg:pb-0 scrollbar-thin select-none">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={cn(
-                "rounded-lg px-3 py-2 text-left text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0",
-                tab === t ? "bg-primary/15 text-text-1 border border-primary/30" : "text-text-2 hover:bg-white/5 hover:text-text-1 border border-transparent"
-              )}
-            >
-              {t}
-            </button>
-          ))}
-        </nav>
-      </Card>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="border-b border-white/[0.06] pb-4">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-50">Settings & Account</h1>
+        <p className="text-sm text-slate-400 mt-1">Manage personal credentials, tenant access policies, and AI swarm configurations.</p>
+      </div>
 
-      <div className="flex flex-col gap-5">
-        {tab === "Profile" && (
-          <Card>
-            <CardHeader title="Profile" subtitle="Manage your personal account details" />
-            <div className="grid grid-cols-1 gap-4 p-5 pt-3 sm:grid-cols-2">
-              <Field label="Full Name" defaultValue="" />
-              <Field label="Email" defaultValue="" type="email" />
-              <Field label="Role" defaultValue="" />
-              <Field label="Phone" defaultValue="" />
-            </div>
-            <div className="flex justify-end gap-2 border-t border-border-1 p-5">
-              <Button variant="primary" onClick={() => push("Profile updated", "Your changes have been saved.", "success")}>
-                Save Changes
-              </Button>
-            </div>
-          </Card>
-        )}
+      {/* Grid 12 Layout: Left 3 Cols Sub-Nav, Right 9 Cols Form Body */}
+      <div className="grid grid-cols-12 gap-8">
+        {/* Left navigation sub-panel: col-span-3 space-y-1 */}
+        <div className="col-span-12 lg:col-span-3 space-y-1 select-none">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all cursor-pointer",
+                  active
+                    ? "bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shadow-lg shadow-indigo-500/5"
+                    : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200 border border-transparent"
+                )}
+              >
+                <Icon className={cn("h-4 w-4 shrink-0", active ? "text-indigo-400" : "text-slate-500")} />
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
 
-        {tab === "Organization" && (
-          <Card>
-            <CardHeader title="Organization" subtitle="Company-wide configuration" />
-            <div className="grid grid-cols-1 gap-4 p-5 pt-3 sm:grid-cols-2">
-              <Field label="Organization Name" defaultValue="" />
-              <Field label="Primary Domain" defaultValue="" />
-              <Field label="Time Zone" defaultValue="" />
-              <Field label="Seats" defaultValue="—" />
-            </div>
-          </Card>
-        )}
-
-        {tab === "Security" && (
-          <Card>
-            <CardHeader title="Security" subtitle="Authentication and access policies" />
-            <div className="px-5">
-              <Row label="Require SSO for all users" description="Enforce single sign-on across the organization" defaultChecked />
-              <Row label="Enforce MFA" description="Require multi-factor authentication on every login" defaultChecked />
-              <Row label="Session timeout after 30 min" description="Automatically sign out idle sessions" />
-              <Row label="IP allow-listing" description="Restrict console access to approved IP ranges" />
-            </div>
-          </Card>
-        )}
-
-        {tab === "Notifications" && (
-          <Card>
-            <CardHeader title="Notifications" subtitle="Choose what AegisSOC AI notifies you about" />
-            <div className="px-5">
-              <Row label="Critical incidents" description="Immediate alert for Critical severity incidents" defaultChecked />
-              <Row label="Agent status changes" description="Notify when an autonomous agent changes status" />
-              <Row label="Weekly report ready" description="Email when the weekly report finishes generating" defaultChecked />
-              <Row label="Risk score changes" description="Notify on significant risk score movement" />
-            </div>
-          </Card>
-        )}
-
-        {tab === "AI Agents" && (
-          <Card>
-            <CardHeader title="AI Agent Configuration" subtitle="Control autonomy and approval requirements" />
-            <div className="px-5">
-              <Row label="Autonomous containment actions" description="Allow the Response Agent to act without approval on Critical incidents" />
-              <Row label="Auto-generate incident reports" description="Report Agent creates a report whenever an incident is resolved" defaultChecked />
-              <Row label="Proactive threat hunting" description="Threat Hunter continuously scans for dormant threats" defaultChecked />
-              <Row label="Model explainability logging" description="Log the reasoning behind every AI recommendation" defaultChecked />
-            </div>
-          </Card>
-        )}
-
-        {tab === "Integrations" && (
-          <Card>
-            <CardHeader title="Integrations" subtitle="Connect AegisSOC AI to your existing stack" />
-            <div className="grid grid-cols-1 gap-3 p-5 pt-3 sm:grid-cols-2">
-              {["Slack", "Jira", "Splunk", "Microsoft Sentinel", "PagerDuty", "ServiceNow"].map((name) => (
-                <div key={name} className="flex items-center justify-between rounded-lg border border-border-1 p-3.5">
-                  <span className="text-sm text-text-1">{name}</span>
-                  <Button size="sm" variant="outline" onClick={() => push(`${name} connected`, undefined, "success")}>
-                    Connect
-                  </Button>
+        {/* Right form body: col-span-9 bg-[#13151F] border border-white/[0.08] rounded-xl p-8 */}
+        <div className="col-span-12 lg:col-span-9 bg-[#13151F] border border-white/[0.08] rounded-xl p-8 shadow-2xl shadow-black/40 relative overflow-hidden before:absolute before:inset-0 before:bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] before:from-white/[0.03] before:to-transparent before:pointer-events-none">
+          <div className="relative z-10 space-y-6">
+            {tab === "Profile" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Personal Identity & Credentials</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Manage your operator details across the security perimeter</p>
                 </div>
-              ))}
-            </div>
-          </Card>
-        )}
 
-        {tab === "Appearance" && (
-          <Card>
-            <CardHeader title="Appearance" subtitle="Display preferences" />
-            <div className="px-5">
-              <Row label="Dark mode" description="AegisSOC AI is optimized for a dark, low-glare interface" defaultChecked />
-              <Row label="Compact density" description="Reduce spacing for higher information density" />
-              <Row label="Reduce motion" description="Minimize animations across the platform" />
-            </div>
-          </Card>
-        )}
+                {/* 2-Column Form Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Full Name</label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Alex Rivers"
+                      className="w-full bg-[#0D0E14] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Email Address (Primary)</label>
+                    <input
+                      type="email"
+                      value={email}
+                      disabled
+                      placeholder="analyst@aegissoc.ai"
+                      className="w-full bg-[#0D0E14]/50 border border-white/[0.06] rounded-lg px-4 py-2.5 text-sm text-slate-400 opacity-80 cursor-not-allowed"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Role Designation</label>
+                    <input
+                      type="text"
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      placeholder="e.g. Senior Security Lead"
+                      className="w-full bg-[#0D0E14] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Contact Phone</label>
+                    <input
+                      type="text"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+1 (555) 019-2834"
+                      className="w-full bg-[#0D0E14] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Action Footer */}
+                <div className="flex items-center justify-end gap-3 pt-6 border-t border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-transparent px-5 py-2.5 text-xs font-semibold text-slate-300 hover:bg-white/[0.05] hover:text-slate-100 transition-all cursor-pointer"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={saving}
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-6 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {saving ? <Loader2 className="h-4 w-4 animate-spin text-white" /> : <Save className="h-4 w-4" />}
+                    <span>{saving ? "Saving Changes..." : "Save Changes"}</span>
+                  </button>
+                </div>
+              </>
+            )}
+
+            {tab === "Organization" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Organization Settings</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Workspace tenant configurations</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Organization Name</label>
+                    <input
+                      type="text"
+                      defaultValue="AegisSOC Enterprise"
+                      className="w-full bg-[#0D0E14] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-300">Primary Domain</label>
+                    <input
+                      type="text"
+                      defaultValue="aegissoc.ai"
+                      className="w-full bg-[#0D0E14] border border-white/10 rounded-lg px-4 py-2.5 text-sm text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tab === "Security" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Security & Authentication Policies</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Configure access rules across all active accounts</p>
+                </div>
+                <Row label="Require SSO for all users" description="Enforce SAML 2.0 / Okta single sign-on across tenant" defaultChecked />
+                <Row label="Enforce Multi-Factor Authentication (MFA)" description="Require WebAuthn hardware token or TOTP code" defaultChecked />
+                <Row label="Session Timeout (30 Min)" description="Automatically sign out inactive console sessions" defaultChecked />
+                <Row label="IP Range Whitelisting" description="Restrict access to authorized corporate VPN CIDRs" />
+              </>
+            )}
+
+            {tab === "Notifications" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Notification Channels</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Manage automated high-priority incident dispatches</p>
+                </div>
+                <Row label="Critical Incident Dispatches" description="Send instant push notification on Critical severity alerts" defaultChecked />
+                <Row label="Autonomous Containment Reports" description="Notify when Response Agent isolates a host" defaultChecked />
+                <Row label="Weekly Executive PDF Summary" description="Generate and email weekly security posture summary" defaultChecked />
+              </>
+            )}
+
+            {tab === "AI Agents" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">AI Swarm Autonomy Thresholds</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Control human-in-the-loop validation parameters</p>
+                </div>
+                <Row label="Autonomous Critical Containment" description="Allow Response Agent to isolate hosts without analyst sign-off" defaultChecked />
+                <Row label="Proactive Threat Hunting" description="Continuous background hunting for dormant APT implants" defaultChecked />
+                <Row label="Explainability Chain Logging" description="Store complete LLM reasoning trace for audit compliance" defaultChecked />
+              </>
+            )}
+
+            {tab === "Integrations" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Security Stack Integrations</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Connect SIEM, EDR, and ticketing platforms</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {["Slack SOC Channel", "Jira Security", "Splunk Enterprise", "Microsoft Sentinel", "PagerDuty Incident Command", "ServiceNow ITOM"].map((item) => (
+                    <div key={item} className="flex items-center justify-between rounded-xl border border-white/[0.08] bg-[#0D0E14] p-4">
+                      <span className="text-xs font-semibold text-slate-200">{item}</span>
+                      <button type="button" onClick={() => push(`${item} Connected`, "Integration active", "success")} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/5 transition-colors cursor-pointer">
+                        Connect
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {tab === "Appearance" && (
+              <>
+                <div className="border-b border-white/[0.06] pb-4">
+                  <h3 className="text-lg font-bold text-slate-100">Display Theme & Density</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Console interface preferences</p>
+                </div>
+                <Row label="Deep Midnight Theme (#090A0F)" description="Optimized low-glare dark mode layout" defaultChecked />
+                <Row label="High Density Grid Spacing" description="Compact layouts for multi-monitor SOC displays" defaultChecked />
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

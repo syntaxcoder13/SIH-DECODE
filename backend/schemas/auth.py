@@ -8,6 +8,10 @@ class UserRegister(BaseModel):
     password: str = Field(..., min_length=6)
     role: Optional[str] = "analyst"  # admin, analyst, viewer
 
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    role: Optional[str] = None
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Shield, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
@@ -15,6 +15,14 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const isAuth = localStorage.getItem("aegis_auth") === "true";
+    const token = localStorage.getItem("aegis_token");
+    if (isAuth && token) {
+      router.replace("/dashboard");
+    }
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +40,8 @@ export default function LoginPage() {
         if (response && response.access_token) {
           localStorage.setItem("aegis_auth", "true");
           localStorage.setItem("aegis_token", response.access_token);
+          if (response.name) localStorage.setItem("aegis_user_name", response.name);
+          if (response.role) localStorage.setItem("aegis_user_role", response.role);
           window.dispatchEvent(new Event("aegis_auth_change"));
           router.push("/dashboard");
         } else {
@@ -47,7 +57,7 @@ export default function LoginPage() {
         });
 
         // 3. Auto-Login after registration
-        const loginResponse = await client.post<{ access_token: string }>(
+        const loginResponse = await client.post<{ access_token: string; name: string; role: string }>(
           "/api/auth/login",
           { email, password }
         );
@@ -55,6 +65,8 @@ export default function LoginPage() {
         if (loginResponse && loginResponse.access_token) {
           localStorage.setItem("aegis_auth", "true");
           localStorage.setItem("aegis_token", loginResponse.access_token);
+          localStorage.setItem("aegis_user_name", name || loginResponse.name || "User");
+          localStorage.setItem("aegis_user_role", loginResponse.role || "analyst");
           window.dispatchEvent(new Event("aegis_auth_change"));
           router.push("/dashboard");
         }
