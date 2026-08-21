@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 interface RequestOptions extends RequestInit {
   timeout?: number;
@@ -53,10 +53,25 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     }
 
     if (!response.ok) {
+      let errorMessage = `API request failed with status ${response.status}`;
+      if (typeof data === "object" && data !== null) {
+        const obj = data as Record<string, unknown>;
+        if (typeof obj.detail === "string") {
+          errorMessage = obj.detail;
+        } else if (Array.isArray(obj.detail)) {
+          errorMessage = obj.detail
+            .map((err: any) => {
+              const field = err.loc && err.loc.length > 0 ? err.loc[err.loc.length - 1] : "";
+              return field && field !== "body" ? `${field}: ${err.msg}` : err.msg;
+            })
+            .join("; ");
+        } else if (typeof obj.message === "string") {
+          errorMessage = obj.message;
+        }
+      }
+
       throw new ApiError(
-        typeof data === "object" && data !== null && "message" in data
-          ? String((data as { message: string }).message)
-          : `API request failed with status ${response.status}`,
+        errorMessage,
         response.status,
         data
       );
